@@ -9,6 +9,7 @@ from transformers import SamModel, SamProcessor
 from PIL import Image
 from skimage import transform, io, segmentation
 from segment_anything import sam_model_registry, SamPredictor
+from segment_anything.utils.transforms import ResizeLongestSide
 from utils import *
 
 
@@ -90,52 +91,96 @@ def malignant_dataset():
         if i == 0: break
 
 
+def prepare_image(image, transform, device):
+    image = transform.apply_image(image)
+    image = torch.as_tensor(image, device=device.device) 
+    return image.permute(2, 0, 1).contiguous()
+
+
+
 def segment_img(npz_file):
 
-    img_names = os.listdir(npz_file)
+    # img_names = os.listdir(npz_file)
 
     
-    data = np.load("embeddings/malignant_26.png.npz")
-    img_emb = data['img_emb']
-    img_label = data['label']
+    # data = np.load("embeddings/malignant_26.png.npz")
+    # img_emb = data['img_emb']
+    # img_label = data['label']
     # print(img_emb.shape)
     # print(img_label.shape)
 
     # print("image_name: ", img_name)
 
-
-    H, W = img_label.shape
-    y_indices, x_indices = np.where(img_label > 0)
-    x_min, x_max = np.min(x_indices), np.max(x_indices)
-    y_min, y_max = np.min(y_indices), np.max(y_indices)
-    x_min = max(0, x_min - np.random.randint(0, 20))
-    x_max = min(W, x_max + np.random.randint(0, 20))
-    y_min = max(0, y_min - np.random.randint(0, 20))
-    y_max = min(H, y_max + np.random.randint(0, 20))
-    bboxes = np.array([x_min, y_min, x_max, y_max])
+    sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
+    resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
 
 
+    image_1 = io.imread("dataset/malignant/images/malignant_102.png")
+    image_2 = io.imread("dataset/malignant/images/malignant_103.png")
 
-    image = io.imread("dataset/malignant/images/malignant_26.png")
+    label_1 = io.imread("dataset/malignant/labels/malignant_102.png")
+    label_2 = io.imread("dataset/malignant/labels/malignant_103.png")
 
-    predictor.set_image(image)
+    image_1_boxes = torch.tensor(np.array([get_bbox_from_mask(label_1)]))
+    image_2_boxes = torch.tensor(np.array([get_bbox_from_mask(label_2)]))
 
-    input_point = np.array([[325, 32]])
-    input_label = np.array([1])
+    batched_input = [
+     {
+         'image': prepare_image(image_1, resize_transform, sam),
+         'boxes': resize_transform.apply_boxes_torch(image_1_boxes, image_1.shape[:2]),
+         'original_size': image_1.shape[:2]
+     },
+     {
+         'image': prepare_image(image_2, resize_transform, sam),
+         'boxes': resize_transform.apply_boxes_torch(image_2_boxes, image_2.shape[:2]),
+         'original_size': image_2.shape[:2]
+     }
+    ]
 
-    plt.figure(figsize=(10,10))
-    plt.imshow(image)
-    show_points(input_point, input_label, plt.gca())
-    plt.axis('on')
+    batched_output = sam(batched_input, multimask_output=False)
+
+    print("batched_output[0].keys(): ", batched_output[0].keys())
+
+    fig, ax = plt.subplots(1, 2, figsize=(20, 20))
+
+    ax[0].imshow(image_1)
+    for mask in batched_output[0]['masks']:
+        show_mask(mask.cpu().numpy(), ax[0], random_color=True)
+    for box in image_1_boxes:
+        show_box(box.cpu().numpy(), ax[0])
+    ax[0].axis('off')
+
+    ax[1].imshow(image_2)
+    for mask in batched_output[1]['masks']:
+        show_mask(mask.cpu().numpy(), ax[1], random_color=True)
+    for box in image_2_boxes:
+        show_box(box.cpu().numpy(), ax[1])
+    ax[1].axis('off')
+
+    plt.tight_layout()
     plt.show()
+    plt.savefig("batched_output.png")
 
-    masks, scores, logits = predictor.predict(
-        point_coords=None,
-        box=bboxes,
-        multimask_output=True,
-    )
 
-    show_masks_on_image(image, masks, scores)
+
+    # predictor.set_image(image)
+
+    # input_point = np.array([[325, 32]])
+    # input_label = np.array([1])
+
+    # plt.figure(figsize=(10,10))
+    # plt.imshow(image)
+    # show_points(input_point, input_label, plt.gca())
+    # plt.axis('on')
+    # plt.show()
+
+    # masks, scores, logits = predictor.predict(
+    #     point_coords=None,
+    #     box=bboxes,
+    #     multimask_output=True,
+    # )
+
+    # show_masks_on_image(image, masks, scores)
 
     # for i, (mask, score) in enumerate(zip(masks, scores)):
     #     plt.figure(figsize=(10,10))

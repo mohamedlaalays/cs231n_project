@@ -90,3 +90,20 @@ def show_masks_on_image(raw_image, masks, scores):
       axes[i].axis("off")
     plt.savefig(f"output.png")
     plt.show()
+
+
+def get_bbox_from_mask(mask):
+    '''Returns a bounding box from a mask'''
+    y_indices, x_indices = np.where(mask > 0)
+    x_min, x_max = np.min(x_indices), np.max(x_indices)
+    y_min, y_max = np.min(y_indices), np.max(y_indices)
+    # add perturbation to bounding box coordinates
+    H, W = mask.shape
+    x_min = max(0, x_min - np.random.randint(0, 20))
+    x_max = min(W, x_max + np.random.randint(0, 20))
+    y_min = max(0, y_min - np.random.randint(0, 20))
+    y_max = min(H, y_max + np.random.randint(0, 20))
+
+    return np.array([x_min, y_min, x_max, y_max])
+
+
