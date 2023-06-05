@@ -83,9 +83,10 @@ def show_masks_on_image(raw_image, masks, scores):
     fig, axes = plt.subplots(1, nb_predictions, figsize=(15, 15))
 
     for i, (mask, score) in enumerate(zip(masks, scores)):
-      mask = mask.cpu().detach()
+      # mask = mask.cpu().detach()
       axes[i].imshow(np.array(raw_image))
       show_mask(mask, axes[i])
       axes[i].title.set_text(f"Mask {i+1}, Score: {score.item():.3f}")
       axes[i].axis("off")
+    plt.savefig(f"output.png")
     plt.show()

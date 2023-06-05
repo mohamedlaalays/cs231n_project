@@ -94,47 +94,65 @@ def segment_img(npz_file):
 
     img_names = os.listdir(npz_file)
 
-    for i, img_name in enumerate(img_names):
-        # print("image_name: ", img_name)
-        data = np.load(f'{npz_file}/{img_name}')
-        img_emb = data['img_emb']
-        img_label = data['label']
-        # print(img_emb.shape)
-        # print(img_label.shape)
+    
+    data = np.load("embeddings/malignant_26.png.npz")
+    img_emb = data['img_emb']
+    img_label = data['label']
+    # print(img_emb.shape)
+    # print(img_label.shape)
 
-        image = io.imread("dataset/malignant/malignant_161.png")
+    # print("image_name: ", img_name)
 
-        predictor.set_image(image)
 
-        input_point = np.array([[500, 375]])
-        input_label = np.array([1])
-
-        plt.figure(figsize=(10,10))
-        plt.imshow(image)
-        show_points(input_point, input_label, plt.gca())
-        plt.axis('on')
-        plt.show()
-
-        masks, scores, logits = predictor.predict(
-            point_coords=input_point,
-            point_labels=input_label,
-            multimask_output=True,
-        )
-
-        for i, (mask, score) in enumerate(zip(masks, scores)):
-            plt.figure(figsize=(10,10))
-            plt.imshow(image)
-            show_mask(mask, plt.gca())
-            show_points(input_point, input_label, plt.gca())
-            plt.title(f"Mask {i+1}, Score: {score:.3f}", fontsize=18)
-            plt.axis('off')
-            plt.show()
+    H, W = img_label.shape
+    y_indices, x_indices = np.where(img_label > 0)
+    x_min, x_max = np.min(x_indices), np.max(x_indices)
+    y_min, y_max = np.min(y_indices), np.max(y_indices)
+    x_min = max(0, x_min - np.random.randint(0, 20))
+    x_max = min(W, x_max + np.random.randint(0, 20))
+    y_min = max(0, y_min - np.random.randint(0, 20))
+    y_max = min(H, y_max + np.random.randint(0, 20))
+    bboxes = np.array([x_min, y_min, x_max, y_max])
 
 
 
+    image = io.imread("dataset/malignant/images/malignant_26.png")
+
+    predictor.set_image(image)
+
+    input_point = np.array([[325, 32]])
+    input_label = np.array([1])
+
+    plt.figure(figsize=(10,10))
+    plt.imshow(image)
+    show_points(input_point, input_label, plt.gca())
+    plt.axis('on')
+    plt.show()
+
+    masks, scores, logits = predictor.predict(
+        point_coords=None,
+        box=bboxes,
+        multimask_output=True,
+    )
+
+    show_masks_on_image(image, masks, scores)
+
+    # for i, (mask, score) in enumerate(zip(masks, scores)):
+    #     plt.figure(figsize=(10,10))
+    #     plt.imshow(image),
+    #     show_masks_on_image(image, mask, score),
+    #     # show_mask(mask, plt.gca())
+    #     # show_points(input_point, input_label, plt.gca())
+    #     # show_boxes_on_image(image, [bboxes])
+    #     plt.title(f"Mask {i+1}, Score: {score:.3f}", fontsize=18)
+    #     plt.axis('off')
+    #     plt.savefig(f"output_{i}.png")
 
 
-        break
+
+
+
+        # break
 
 
 
