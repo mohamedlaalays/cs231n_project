@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import cv2
+from skimage import io
 
 def show_mask(mask, ax, random_color=False):
     if random_color:
@@ -107,3 +109,30 @@ def get_bbox_from_mask(mask):
     return np.array([x_min, y_min, x_max, y_max])
 
 
+def superpose_img_label(original_image, segmentation_mask, img_num):
+  original_image = cv2.imread(original_image)
+  segmentation_mask = cv2.imread(segmentation_mask, 0)  # Load as grayscale
+  # Create a colored mask by converting the grayscale mask to color
+  colored_mask = cv2.cvtColor(segmentation_mask, cv2.COLOR_GRAY2BGR)
+  # Set the color of the mask (e.g., green)
+  mask_color = (0, 255, 0)  # Green color
+  # Apply the mask color to the colored mask
+  colored_mask[np.where((colored_mask == [255, 255, 255]).all(axis=2))] = mask_color
+  # Superpose the colored mask on the original image
+  superposed_image = cv2.addWeighted(original_image, 0.7, colored_mask, 0.3, 0)
+  cv2.imwrite(f'org_label_{img_num}.png', superposed_image)
+
+
+
+def superpose_img_mask(img_path, label_path, mask, img_num):
+  fig, ax = plt.subplots()
+  image = io.imread(img_path)
+  label = io.imread(label_path)
+  image_box = get_bbox_from_mask(label)
+  ax.imshow(image, aspect='auto')
+  show_mask(mask, ax, random_color=True)
+  show_box(image_box, ax)
+  ax.axis('off')
+
+  plt.tight_layout()
+  plt.savefig(f"pred_label_{img_num}.png")
