@@ -1,4 +1,3 @@
-# %% set up environment
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -10,8 +9,10 @@ from PIL import Image
 from skimage import transform, io, segmentation
 from segment_anything import sam_model_registry, SamPredictor
 from segment_anything.utils.transforms import ResizeLongestSide
+from torch.nn.utils.rnn import pad_sequence
+from torch.nn import functional as F
+import re
 from utils import *
-
 
 # set seeds
 torch.manual_seed(231)
@@ -19,76 +20,118 @@ np.random.seed(231)
 
 join = os.path.join
 
+sam_checkpoint = "models/sam_vit_h_4b8939.pth"
+model_type = "vit_h"
+device = "cuda"
 
-# create a dataset class to load npz data and return back image embeddings and ground truth
-class NpzDataset(Dataset): 
-    def __init__(self, data_root):
-        self.data_root = data_root
-        self.npz_files = sorted(os.listdir(self.data_root)) 
-        self.npz_data = [np.load(join(data_root, f)) for f in self.npz_files]
-
-        max_length = max(len(d['label']) for d in self.npz_data)
-        # Pad all arrays with zeros using NumPy
-        padded_labels = [np.pad(d['label'], (0, max_length - len(d['label'])), 'constant') for d in self.npz_data]
-
-        self.ori_gts = np.vstack([label for label in padded_labels])
-        self.img_embeddings = np.vstack([d['img_emb'] for d in self.npz_data])
-        print(f"{self.img_embeddings.shape=}, {self.ori_gts.shape=}")
-    
-    def __len__(self):
-        return self.ori_gts.shape[0]
-
-    def __getitem__(self, index):
-        img_embed = self.img_embeddings[index]
-        gt2D = self.ori_gts[index]
-        y_indices, x_indices = np.where(gt2D > 0)
-        x_min, x_max = np.min(x_indices), np.max(x_indices)
-        y_min, y_max = np.min(y_indices), np.max(y_indices)
-
-        # add perturbation to bounding box coordinates
-        H, W = gt2D.shape
-        x_min = max(0, x_min - np.random.randint(0, 20))
-        x_max = min(W, x_max + np.random.randint(0, 20))
-        y_min = max(0, y_min - np.random.randint(0, 20))
-        y_max = min(H, y_max + np.random.randint(0, 20))
-        bboxes = np.array([x_min, y_min, x_max, y_max])
-
-        # convert img embedding, mask, bounding box to torch tensor
-        return torch.tensor(img_embed).float(), torch.tensor(gt2D[None, :,:]).long(), torch.tensor(bboxes).float()
+sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
+resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
 
 
 
-def malignant_dataset():
-
-
-    # print("dir: ", os.listdir("dataset/MedSAMDemo_2D/test/images/"))
-    data_path = "dataset/malignant"
+def create_npz_dataset(data):
+    data_path = f"dataset/{data}"
     img_names = os.listdir(f"{data_path}/images")
+    resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
     for i, img_name in enumerate(img_names):
+        print(f"Processing image ... {i}")
         # Since images are in grayscale, all three channels have the same value
         img = io.imread(f"{data_path}/images/{img_name}") # shape (img_width, img_height, 3) 
         label = io.imread(f"{data_path}/labels/{img_name}") # shape (img_width, img_height, 1)
 
-        print(label.shape)
-        print(img.shape)
+        processed_img = prepare_image(img, resize_transform, sam)
+        original_size = img.shape[:2]
+        with torch.no_grad():
+            img_embeddings = sam.image_encoder(preprocess(processed_img.unsqueeze(dim=0)))
 
-        # outputs is dictionary that stores ['pixel_values', 'original_sizes', 'reshaped_input_sizes']
-        img_outputs = processor(img, return_tensors="pt").to(device)    # ===> DOUBLE CHECK WHY THREE CHANNELS DO NOT HAVE THE SAME VALUES????????????
-        # label_outputs = processor(img, return_tensors='pt').to(device)  # ===> DOUBLE CHECK WHY THREE CHANNELS DO NOT HAVE THE SAME VALUES????????????
+        img_num = int(re.findall(r'\d+', img_name)[0])
 
-        # print("inputs: ", label_outputs.keys())
-        # print("inputs['original_sizes']: ", label_outputs['original_sizes'])
-        # print("inputs['reshaped_input_sizes'].shape: ", label_outputs['reshaped_input_sizes'].shape)
-        # print('inputs["pixel_values"]: ', label_outputs["pixel_values"].shape)
-        # print("slice through one channel: ", img_outputs["pixel_values"][0, 0, 100, 100], img_outputs["pixel_values"][0, 1, 100, 100], img_outputs["pixel_values"][0, 2, 100, 100])
-        # print("img_outputs['pixel_values']: ", img_outputs["pixel_values"])
+        np.savez(f'dataset/npz/{data}/{img_name}.npz', 
+                image=processed_img.cpu(), 
+                label=label, 
+                original_size=original_size,
+                img_embeddings=img_embeddings.cpu(),
+                img_num=img_num)    
 
-        img_emb = model.get_image_embeddings(img_outputs["pixel_values"]) # (1, 256, 64, 64)
-        # print(img_emb.shape)
+        # if i == 1: break
 
-        np.savez(f'embeddings/{img_name}.npz', img_emb=img_emb, label=label)    
 
-        if i == 0: break
+
+
+
+# create a dataset class to load npz data and return back image embeddings and ground truth
+class NpzDataset(Dataset): 
+    def __init__(self, data_root):
+        self.data_root = f'dataset/npz/{data_root}/'
+        self.npz_files = sorted(os.listdir(self.data_root)) 
+        self.npz_data = [np.load(join(self.data_root, f)) for f in self.npz_files]
+
+        # max_length = max(len(d['label']) for d in self.npz_data)
+        # # Pad all arrays with zeros using NumPy
+        # padded_labels = [np.pad(d['label'], (0, max_length - len(d['label'])), 'constant') for d in self.npz_data]
+
+        self.labels = [data['label'] for data in self.npz_data]
+        self.images = [data['image'] for data in self.npz_data]
+        self.original_sizes = [data['original_size'] for data in self.npz_data]
+        self.embeddings = [data['img_embeddings'] for data in self.npz_data]
+        self.img_nums = [data['img_num'] for data in self.npz_data]
+        print(f"loaded {len(self.images)} images drom {data_root} dataset")
+    
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, index):
+        image = self.images[index]
+        label = self.labels[index]
+        """
+        THIS PROBABLY WHERE YOU WILL BE INTEGRATING YOUR CODE BUT IF YOU FIND A BETTER, GO FOR IT
+        """
+        bboxes = torch.tensor(np.array([get_bbox_from_mask(label)]))
+        original_size = self.original_sizes[index]
+        img_embeddings = self.embeddings[index]
+        img_num = self.img_nums[index]
+        
+        return {
+         'image': image,
+         'boxes': resize_transform.apply_boxes_torch(bboxes, original_size),
+         'original_size': original_size,
+         'img_embeddings': img_embeddings,
+         'img_num': img_num # Apparently dataloader doesn't like strings
+        }
+
+
+    # def collate_fn(self, data): 
+
+        
+    #     # image = self.images[index]
+    #     # label = self.labels[index]
+    #     # bboxes = torch.tensor(np.array([get_bbox_from_mask(label)]))
+    #     # original_size = self.original_sizes[index]
+        
+    #     # return {
+    #     #  'image': image,
+    #     # #  'boxes': resize_transform.apply_boxes_torch(bboxes, original_size),
+    #     #  'original_size': original_size
+    #     # }
+
+
+    #     images = [torch.tensor(d['image']) for d in data] #(3)
+    #     labels = [d['label'] for d in data]
+    #     original_sizes = [d['original_size'] for d in data]
+
+    #     images = pad_sequence(images, batch_first=True) #(4)
+    #     # labels = torch.tensor(labels) #(5)
+
+    #     return { #(6)
+    #         'image': images,
+    #         'boxes': torch.tensor(np.array([get_bbox_from_mask(label)])),
+    #         'original_size': original_size
+    #         # 'label': labels
+    #     }
+
+
+
+
 
 
 def prepare_image(image, transform, device):
@@ -98,128 +141,24 @@ def prepare_image(image, transform, device):
 
 
 
-def segment_img(npz_file):
 
-    # img_names = os.listdir(npz_file)
+
+
+def preprocess(x: torch.Tensor) -> torch.Tensor:
+    """Normalize pixel values and pad to a square input."""
+    # Normalize colors
+    x = (x - sam.pixel_mean) / sam.pixel_std
+
+    # Pad
+    h, w = x.shape[-2:]
+    padh = sam.image_encoder.img_size - h
+    padw = sam.image_encoder.img_size - w
+    x = F.pad(x, (0, padw, 0, padh))
+    return x
+
+
+
 
     
-    # data = np.load("embeddings/malignant_26.png.npz")
-    # img_emb = data['img_emb']
-    # img_label = data['label']
-    # print(img_emb.shape)
-    # print(img_label.shape)
-
-    # print("image_name: ", img_name)
-
-    sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-    resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
-
-
-    image_1 = io.imread("dataset/malignant/images/malignant_102.png")
-    image_2 = io.imread("dataset/malignant/images/malignant_103.png")
-
-    label_1 = io.imread("dataset/malignant/labels/malignant_102.png")
-    label_2 = io.imread("dataset/malignant/labels/malignant_103.png")
-
-    image_1_boxes = torch.tensor(np.array([get_bbox_from_mask(label_1)]))
-    image_2_boxes = torch.tensor(np.array([get_bbox_from_mask(label_2)]))
-
-    batched_input = [
-     {
-         'image': prepare_image(image_1, resize_transform, sam),
-         'boxes': resize_transform.apply_boxes_torch(image_1_boxes, image_1.shape[:2]),
-         'original_size': image_1.shape[:2]
-     },
-     {
-         'image': prepare_image(image_2, resize_transform, sam),
-         'boxes': resize_transform.apply_boxes_torch(image_2_boxes, image_2.shape[:2]),
-         'original_size': image_2.shape[:2]
-     }
-    ]
-
-    batched_output = sam(batched_input, multimask_output=False)
-
-    print("batched_output[0].keys(): ", batched_output[0].keys())
-
-    fig, ax = plt.subplots(1, 2, figsize=(20, 20))
-
-    ax[0].imshow(image_1)
-    for mask in batched_output[0]['masks']:
-        show_mask(mask.cpu().numpy(), ax[0], random_color=True)
-    for box in image_1_boxes:
-        show_box(box.cpu().numpy(), ax[0])
-    ax[0].axis('off')
-
-    ax[1].imshow(image_2)
-    for mask in batched_output[1]['masks']:
-        show_mask(mask.cpu().numpy(), ax[1], random_color=True)
-    for box in image_2_boxes:
-        show_box(box.cpu().numpy(), ax[1])
-    ax[1].axis('off')
-
-    plt.tight_layout()
-    plt.show()
-    plt.savefig("batched_output.png")
-
-
-
-    # predictor.set_image(image)
-
-    # input_point = np.array([[325, 32]])
-    # input_label = np.array([1])
-
-    # plt.figure(figsize=(10,10))
-    # plt.imshow(image)
-    # show_points(input_point, input_label, plt.gca())
-    # plt.axis('on')
-    # plt.show()
-
-    # masks, scores, logits = predictor.predict(
-    #     point_coords=None,
-    #     box=bboxes,
-    #     multimask_output=True,
-    # )
-
-    # show_masks_on_image(image, masks, scores)
-
-    # for i, (mask, score) in enumerate(zip(masks, scores)):
-    #     plt.figure(figsize=(10,10))
-    #     plt.imshow(image),
-    #     show_masks_on_image(image, mask, score),
-    #     # show_mask(mask, plt.gca())
-    #     # show_points(input_point, input_label, plt.gca())
-    #     # show_boxes_on_image(image, [bboxes])
-    #     plt.title(f"Mask {i+1}, Score: {score:.3f}", fontsize=18)
-    #     plt.axis('off')
-    #     plt.savefig(f"output_{i}.png")
-
-
-
-
-
-        # break
-
-
-
-if __name__ == "__main__":
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = SamModel.from_pretrained("facebook/sam-vit-huge").to(device)
-    processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
-    # malignant_dataset()
-
-    # masks = processor.image_processor.post_process_masks(outputs.pred_masks.cpu(), inputs["original_sizes"].cpu(), inputs["reshaped_input_sizes"].cpu())
-
-    # NpzDataset("embeddings")
-
-    sam_checkpoint = "models/sam_vit_h_4b8939.pth"
-    model_type = "vit_h"
-
-    device = "cuda"
-
-    sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-    sam.to(device=device)
-
-    predictor = SamPredictor(sam)
-
-    segment_img('embeddings')
+    
 
