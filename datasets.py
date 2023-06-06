@@ -11,6 +11,8 @@ from skimage import transform, io, segmentation
 from segment_anything import sam_model_registry, SamPredictor
 from segment_anything.utils.transforms import ResizeLongestSide
 from torch.nn.utils.rnn import pad_sequence
+from torch.nn import functional as F
+import re
 from utils import *
 
 
@@ -36,17 +38,27 @@ def create_npz_dataset(data):
     img_names = os.listdir(f"{data_path}/images")
     resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
     for i, img_name in enumerate(img_names):
+        print(f"{img_name=}")
         # Since images are in grayscale, all three channels have the same value
         img = io.imread(f"{data_path}/images/{img_name}") # shape (img_width, img_height, 3) 
         label = io.imread(f"{data_path}/labels/{img_name}") # shape (img_width, img_height, 1)
 
         processed_img = prepare_image(img, resize_transform, sam)
         original_size = img.shape[:2]
+        with torch.no_grad():
+            img_embeddings = sam.image_encoder(preprocess(processed_img.unsqueeze(dim=0)))
+
+        print(f"creatind dataset: {original_size=}, {processed_img.shape=}")
+
+
+        img_num = int(re.findall(r'\d+', img_name)[0])
 
         np.savez(f'dataset/npz/{data}/{img_name}.npz', 
                 image=processed_img.cpu(), 
                 label=label, 
-                original_size=original_size)    
+                original_size=original_size,
+                img_embeddings=img_embeddings.cpu(),
+                img_num=img_num)    
 
         if i == 1: break
 
@@ -68,6 +80,8 @@ class NpzDataset(Dataset):
         self.labels = [data['label'] for data in self.npz_data]
         self.images = [data['image'] for data in self.npz_data]
         self.original_sizes = [data['original_size'] for data in self.npz_data]
+        self.embeddings = [data['img_embeddings'] for data in self.npz_data]
+        self.img_nums = [data['img_num'] for data in self.npz_data]
         print(f"{self.images[0].shape=}")
         print(f"{len(self.images)=}, {len(self.labels)=}")
     
@@ -75,49 +89,53 @@ class NpzDataset(Dataset):
         return len(self.images)
 
     def __getitem__(self, index):
-        return self.npz_data[index]
+        # return self.npz_data[index]
 
 
         image = self.images[index]
         label = self.labels[index]
         bboxes = torch.tensor(np.array([get_bbox_from_mask(label)]))
         original_size = self.original_sizes[index]
+        img_embeddings = self.embeddings[index]
+        img_num = self.img_nums[index]
         
         return {
          'image': image,
          'boxes': resize_transform.apply_boxes_torch(bboxes, original_size),
-         'original_size': original_size
+         'original_size': original_size,
+         'img_embeddings': img_embeddings,
+         'img_num': img_num # Apparently dataloader doesn't like strings
         }
 
 
-    def collate_fn(self, data): 
+    # def collate_fn(self, data): 
 
         
-        # image = self.images[index]
-        # label = self.labels[index]
-        # bboxes = torch.tensor(np.array([get_bbox_from_mask(label)]))
-        # original_size = self.original_sizes[index]
+    #     # image = self.images[index]
+    #     # label = self.labels[index]
+    #     # bboxes = torch.tensor(np.array([get_bbox_from_mask(label)]))
+    #     # original_size = self.original_sizes[index]
         
-        # return {
-        #  'image': image,
-        # #  'boxes': resize_transform.apply_boxes_torch(bboxes, original_size),
-        #  'original_size': original_size
-        # }
+    #     # return {
+    #     #  'image': image,
+    #     # #  'boxes': resize_transform.apply_boxes_torch(bboxes, original_size),
+    #     #  'original_size': original_size
+    #     # }
 
 
-        images = [torch.tensor(d['image']) for d in data] #(3)
-        labels = [d['label'] for d in data]
-        original_sizes = [d['original_size'] for d in data]
+    #     images = [torch.tensor(d['image']) for d in data] #(3)
+    #     labels = [d['label'] for d in data]
+    #     original_sizes = [d['original_size'] for d in data]
 
-        images = pad_sequence(images, batch_first=True) #(4)
-        # labels = torch.tensor(labels) #(5)
+    #     images = pad_sequence(images, batch_first=True) #(4)
+    #     # labels = torch.tensor(labels) #(5)
 
-        return { #(6)
-            'image': images,
-            'boxes': torch.tensor(np.array([get_bbox_from_mask(label)])),
-            'original_size': original_size
-            # 'label': labels
-        }
+    #     return { #(6)
+    #         'image': images,
+    #         'boxes': torch.tensor(np.array([get_bbox_from_mask(label)])),
+    #         'original_size': original_size
+    #         # 'label': labels
+    #     }
 
 
 
@@ -131,7 +149,7 @@ def prepare_image(image, transform, device):
 
 
 
-def segment_img(data):
+def segment_img(data, file_name):
 
     # img_names = os.listdir(npz_file)
 
@@ -169,34 +187,42 @@ def segment_img(data):
     #  }
     # ]
 
-    for batch in data_dataloader:
+    for i, batch in enumerate(data_dataloader):
 
         # print(f'{batch['image'].shape}=')
         # print(batch)
+
+        print(f"{len(batch)=}")
 
         batched_output = sam([batch], multimask_output=False)
 
         # print("batched_output[0].keys(): ", batched_output[0].keys())
 
-        fig, ax = plt.subplots(1, 2, figsize=(20, 20))
+        fig, ax = plt.subplots(1, 1, figsize=(20, 20))
+        img_num = batch['img_num'].item()
+        image_1 = io.imread(f"dataset/malignant/images/{file_name}_{img_num}.png")
+        label_1 = io.imread(f"dataset/malignant/labels/{file_name}_{img_num}.png")
+        image_1_boxes = torch.tensor(np.array([get_bbox_from_mask(label_1)]))
 
-        ax[0].imshow(image_1)
+
+
+        ax.imshow(image_1)
         for mask in batched_output[0]['masks']:
-            show_mask(mask.cpu().numpy(), ax[0], random_color=True)
+            show_mask(mask.cpu().numpy(), ax, random_color=True)
         for box in image_1_boxes:
-            show_box(box.cpu().numpy(), ax[0])
-        ax[0].axis('off')
+            show_box(box.cpu().numpy(), ax)
+        ax.axis('off')
 
-        ax[1].imshow(image_2)
-        for mask in batched_output[1]['masks']:
-            show_mask(mask.cpu().numpy(), ax[1], random_color=True)
-        for box in image_2_boxes:
-            show_box(box.cpu().numpy(), ax[1])
-        ax[1].axis('off')
+        # ax[1].imshow(image_2)
+        # for mask in batched_output[1]['masks']:
+        #     show_mask(mask.cpu().numpy(), ax[1], random_color=True)
+        # for box in image_2_boxes:
+        #     show_box(box.cpu().numpy(), ax[1])
+        # ax[1].axis('off')
 
         plt.tight_layout()
         plt.show()
-        plt.savefig("batch_output.png")
+        plt.savefig(f"batched_{i}.png")
 
 
 
@@ -236,12 +262,25 @@ def segment_img(data):
 
         # break
 
+def preprocess(x: torch.Tensor) -> torch.Tensor:
+    """Normalize pixel values and pad to a square input."""
+    # Normalize colors
+    x = (x - sam.pixel_mean) / sam.pixel_std
+
+    # Pad
+    h, w = x.shape[-2:]
+    padh = sam.image_encoder.img_size - h
+    padw = sam.image_encoder.img_size - w
+    x = F.pad(x, (0, padw, 0, padh))
+    print(f"{x.shape=}")
+    return x
+
 
 
 if __name__ == "__main__":
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = SamModel.from_pretrained("facebook/sam-vit-huge").to(device)
-    processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # model = SamModel.from_pretrained("facebook/sam-vit-huge").to(device)
+    # processor = SamProcessor.from_pretrained("facebook/sam-vit-huge")
     # malignant_dataset()
 
     # masks = processor.image_processor.post_process_masks(outputs.pred_masks.cpu(), inputs["original_sizes"].cpu(), inputs["reshaped_input_sizes"].cpu())
@@ -253,16 +292,16 @@ if __name__ == "__main__":
 
     device = "cuda"
 
-    sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-    sam.to(device=device)
+    # sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
+    # sam.to(device=device)
 
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
     resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
 
     # predictor = SamPredictor(sam)
-    # create_npz_dataset('malignant')
+    create_npz_dataset('malignant')
     # NpzDataset('dataset/npz/malignant')
-    segment_img('dataset/npz/malignant')
+    segment_img('dataset/npz/malignant', 'malignant')
     
     
 
