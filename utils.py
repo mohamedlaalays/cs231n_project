@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 from skimage import io
+from skimage.color import gray2rgb
+from skimage.util import img_as_ubyte
 
 def show_mask(mask, ax, random_color=False):
     if random_color:
@@ -120,7 +122,7 @@ def superpose_img_label(original_image, segmentation_mask, img_num):
   colored_mask[np.where((colored_mask == [255, 255, 255]).all(axis=2))] = mask_color
   # Superpose the colored mask on the original image
   superposed_image = cv2.addWeighted(original_image, 0.7, colored_mask, 0.3, 0)
-  cv2.imwrite(f'org_label_{img_num}.png', superposed_image)
+  cv2.imwrite(f'sample_images/org_label_{img_num}.png', superposed_image)
 
 
 
@@ -135,4 +137,22 @@ def superpose_img_mask(img_path, label_path, mask, img_num):
   ax.axis('off')
 
   plt.tight_layout()
-  plt.savefig(f"pred_label_{img_num}.png")
+  plt.savefig(f"sample_images/pred_label_{img_num}.png")
+
+
+
+# def side_by_side(original_image_path, segmentation_mask_path, img_num):
+#   original_image = io.imread(original_image_path)
+#   segmentation_mask = io.imread(segmentation_mask_path)
+#   # Convert the segmentation mask to RGB if it is grayscale
+#   if len(segmentation_mask.shape) == 2:
+#       segmentation_mask = gray2rgb(segmentation_mask)
+#   # Normalize the segmentation mask values to [0, 1]
+#   segmentation_mask = segmentation_mask.astype(np.float32) / 255.0
+#   # Create a copy of the original image
+#   output_image = np.copy(original_image)
+#   # Superimpose the segmentation mask on the original image
+#   alpha = 0.7  # Controls the transparency of the segmentation mask
+#   output_image = (output_image * (1 - alpha) + segmentation_mask * alpha).astype(np.uint8)
+
+#   io.imsave(f'sample_images/org_label_{img_num}.png', img_as_ubyte(output_image))

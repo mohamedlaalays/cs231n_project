@@ -1,4 +1,3 @@
-# %% set up environment
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -20,6 +19,15 @@ torch.manual_seed(231)
 np.random.seed(231)
 
 join = os.path.join
+
+sam_checkpoint = "models/sam_vit_h_4b8939.pth"
+model_type = "vit_h"
+device = "cuda"
+
+sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
+resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
+
+
 
 def create_npz_dataset(data):
     data_path = f"dataset/{data}"
@@ -75,6 +83,9 @@ class NpzDataset(Dataset):
     def __getitem__(self, index):
         image = self.images[index]
         label = self.labels[index]
+        """
+        THIS PROBABLY WHERE YOU WILL BE INTEGRATING YOUR CODE BUT IF YOU FIND A BETTER, GO FOR IT
+        """
         bboxes = torch.tensor(np.array([get_bbox_from_mask(label)]))
         original_size = self.original_sizes[index]
         img_embeddings = self.embeddings[index]
@@ -130,23 +141,6 @@ def prepare_image(image, transform, device):
 
 
 
-def segment_img(data):
-
-    dataset = NpzDataset(data)
-    data_dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
-
-    for i, batch in enumerate(data_dataloader):
-
-        if i == 1: break
-
-        batched_output = sam([batch], multimask_output=False)
-
-        img_num = batch['img_num'].item()
-        img_path = f"dataset/{data}/images/{data}_{img_num}.png"
-        label_path = f"dataset/{data}/labels/{data}_{img_num}.png"
-
-        superpose_img_label(img_path, label_path, img_num)
-        superpose_img_mask(img_path, label_path, batched_output[0]['masks'][0], img_num) # first mask of the first output
 
 
 
@@ -164,16 +158,7 @@ def preprocess(x: torch.Tensor) -> torch.Tensor:
 
 
 
-if __name__ == "__main__":
 
-    sam_checkpoint = "models/sam_vit_h_4b8939.pth"
-    model_type = "vit_h"
-    device = "cuda"
-
-    sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-    resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
-
-    segment_img('malignant')
     
     
 
