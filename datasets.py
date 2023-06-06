@@ -38,6 +38,7 @@ def create_npz_dataset(data):
     img_names = os.listdir(f"{data_path}/images")
     resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
     for i, img_name in enumerate(img_names):
+        print(f"Processing image {i}")
         print(f"{img_name=}")
         # Since images are in grayscale, all three channels have the same value
         img = io.imread(f"{data_path}/images/{img_name}") # shape (img_width, img_height, 3) 
@@ -60,7 +61,7 @@ def create_npz_dataset(data):
                 img_embeddings=img_embeddings.cpu(),
                 img_num=img_num)    
 
-        if i == 1: break
+        # if i == 1: break
 
 
 
@@ -299,9 +300,11 @@ if __name__ == "__main__":
     resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
 
     # predictor = SamPredictor(sam)
+    # create_npz_dataset('benign')
     create_npz_dataset('malignant')
+    
     # NpzDataset('dataset/npz/malignant')
-    segment_img('dataset/npz/malignant', 'malignant')
+    # segment_img('dataset/npz/malignant', 'malignant')
     
     
 
