@@ -2,3 +2,5 @@ models/
 .DS_Store*
 segment-anything/
 dataset/npz/
+231n/
+Anaconda2-4.1.1-Linux-x86_64.sh
