@@ -301,10 +301,10 @@ if __name__ == "__main__":
 
     # predictor = SamPredictor(sam)
     # create_npz_dataset('benign')
-    create_npz_dataset('malignant')
+    # create_npz_dataset('malignant')
     
     # NpzDataset('dataset/npz/malignant')
-    # segment_img('dataset/npz/malignant', 'malignant')
+    segment_img('dataset/npz/malignant', 'malignant')
     
     
 
