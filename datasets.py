@@ -20,13 +20,6 @@ np.random.seed(231)
 
 join = os.path.join
 
-sam_checkpoint = "models/sam_vit_h_4b8939.pth"
-model_type = "vit_h"
-device = "cuda"
-
-sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
-
 
 
 def create_npz_dataset(data):
@@ -46,14 +39,14 @@ def create_npz_dataset(data):
 
         img_num = int(re.findall(r'\d+', img_name)[0])
 
-        np.savez(f'dataset/npz/{data}/{img_name}.npz', 
+        np.savez(f'dataset/npz_base/{data}/{img_name}.npz', 
                 image=processed_img.cpu(), 
                 label=label, 
                 original_size=original_size,
                 img_embeddings=img_embeddings.cpu(),
                 img_num=img_num)    
 
-        # if i == 1: break
+        if i == 1: break
 
 
 
@@ -155,6 +148,21 @@ def preprocess(x: torch.Tensor) -> torch.Tensor:
     padw = sam.image_encoder.img_size - w
     x = F.pad(x, (0, padw, 0, padh))
     return x
+
+
+
+if __name__ == "__main__":
+
+    sam_checkpoint = "models/sam_vit_b_01ec64.pth"
+    model_type = "vit_b"
+    device = "cuda"
+
+    sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
+    resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
+
+    create_npz_dataset('malignant')
+    create_npz_dataset('benign')
+    
 
 
 
