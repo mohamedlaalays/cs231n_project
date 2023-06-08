@@ -63,10 +63,11 @@ def create_npz_dataset(data):
 
 # create a dataset class to load npz data and return back image embeddings and ground truth
 class NpzDataset(Dataset): 
-    def __init__(self, data_root):
+    def __init__(self, data_root, bbox_size):
         self.data_root = data_root
         self.npz_files = sorted(os.listdir(self.data_root)) 
         self.npz_data = [np.load(join(self.data_root, f)) for f in self.npz_files]
+        self.bbox_size = bbox_size
 
         # max_length = max(len(d['label']) for d in self.npz_data)
         # # Pad all arrays with zeros using NumPy
@@ -85,54 +86,19 @@ class NpzDataset(Dataset):
     def __getitem__(self, index):
         image = self.images[index]
         label = self.labels[index]
-        """
-        THIS PROBABLY WHERE YOU WILL BE INTEGRATING YOUR CODE BUT IF YOU FIND A BETTER, GO FOR IT
-        """
-        bboxes = torch.tensor(np.array([get_bbox_from_mask(label, 20)]))
+
+        bboxes = torch.tensor(np.array([get_bbox_from_mask(label, self.bbox_size)]))
         original_size = self.original_sizes[index]
         img_embeddings = self.embeddings[index]
         img_num = self.img_nums[index]
-        
 
-        """
-        'image': The image as a torch tensor in 3xHxW format,
-                already transformed for input to the model.
-              'original_size': (tuple(int, int)) The original size of
-                the image before transformation, as (H, W).
-              'point_coords': (torch.Tensor) Batched point prompts for
-                this image, with shape BxNx2. Already transformed to the
-                input frame of the model.
-              'point_labels': (torch.Tensor) Batched labels for point prompts,
-                with shape BxN.
-              'boxes': (torch.Tensor) Batched box inputs, with shape Bx4.
-                Already transformed to the input frame of the model.
-              'mask_inputs': (torch.Tensor) Batched mask inputs to the model,
-                in the form Bx1xHxW.
-        """
-
-        # this function should require config parameter
-
-
-        # return {
-        #  'image': image,
-        #  'boxes': resize_transform.apply_boxes_torch(bboxes, original_size),
-        #  'original_size': original_size,
-        #  'img_embeddings': img_embeddings,
-        #  'img_num': img_num # Apparently dataloader doesn't like strings
-        # }
-
-        point_coords = torch.tensor(get_random_fg(label, 1))
-        
         return {
          'image': image,
-         'point_coords': resize_transform.apply_coords_torch(point_coords, original_size),
-         'original_coords': point_coords,
+         'boxes': resize_transform.apply_boxes_torch(bboxes, original_size),
          'original_size': original_size,
-         'point_labels': torch.Tensor([1]),
          'img_embeddings': img_embeddings,
          'img_num': img_num # Apparently dataloader doesn't like strings
         }
-    
     
 
 
@@ -164,16 +130,10 @@ class NpzDataset(Dataset):
     #     }
 
 
-
-
-
-
 def prepare_image(image, transform, device):
     image = transform.apply_image(image)
     image = torch.as_tensor(image, device=device.device) 
     return image.permute(2, 0, 1).contiguous()
-
-
 
 
 

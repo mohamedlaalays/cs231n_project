@@ -15,13 +15,14 @@ from segment_anything.utils.transforms import ResizeLongestSide
 from datasets import NpzDataset
 import random
 import argparse
+import json
 from utils import *
 from evaluation import *
 
 
 def segment_data(data):
     dataroot = f'dataset/npz_{args.model}/{data}/'
-    dataset = NpzDataset(dataroot)
+    dataset = NpzDataset(dataroot, bbox_size)
     data_dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     dice_coefs, IoU_scores = [], []
@@ -60,8 +61,9 @@ def segment_data(data):
         # break
     avg_dice_coef = sum(dice_coefs) / len(dice_coefs)
     avg_iou_score = sum(IoU_scores) / len(IoU_scores)
-    print(f'The average dice coefficient of {data} dataset: {avg_dice_coef}')
-    print(f'The intersection over union (IoU) of {data} dataset: {avg_iou_score}')
+    print(f'The average dice coefficient of {data} dataset with {bbox_size} box increase: {avg_dice_coef}')
+    print(f'The intersection over union (IoU) of {data} dataset with {bbox_size} box increase: {avg_iou_score}')
+    return avg_dice_coef, avg_iou_score
 
 
 def get_args():
@@ -107,4 +109,14 @@ if __name__ == "__main__":
 
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
     resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
-    segment_data(args.dataset)
+    dataset = args.dataset
+    results = {}
+    for bbox_size in range(0, 100, 10):
+        avg_dice_coef, avg_iou_score = segment_data(dataset)
+        results[bbox_size] = {
+                                'avg_dice_coef': avg_dice_coef,
+                                'avg_iou_score': avg_iou_score
+                              }
+    file_path = f'results/{dataset}_{model_type}_bbox.json'
+    with open(file_path, "w") as json_file:
+        json.dump(results, json_file)
