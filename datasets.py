@@ -13,6 +13,7 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.nn import functional as F
 import re
 from utils import *
+from experiment_setup import*
 
 # set seeds
 torch.manual_seed(231)
@@ -87,7 +88,7 @@ class NpzDataset(Dataset):
         """
         THIS PROBABLY WHERE YOU WILL BE INTEGRATING YOUR CODE BUT IF YOU FIND A BETTER, GO FOR IT
         """
-        bboxes = torch.tensor(np.array([get_bbox_from_mask(label)]))
+        bboxes = torch.tensor(np.array([get_bbox_from_mask(label, 20)]))
         original_size = self.original_sizes[index]
         img_embeddings = self.embeddings[index]
         img_num = self.img_nums[index]
@@ -112,18 +113,31 @@ class NpzDataset(Dataset):
         # this function should require config parameter
 
 
+        # return {
+        #  'image': image,
+        #  'boxes': resize_transform.apply_boxes_torch(bboxes, original_size),
+        #  'original_size': original_size,
+        #  'img_embeddings': img_embeddings,
+        #  'img_num': img_num # Apparently dataloader doesn't like strings
+        # }
+
+        point_coords = torch.tensor(get_random_fg(label, 1))
+        
         return {
          'image': image,
-         'boxes': resize_transform.apply_boxes_torch(bboxes, original_size),
+         'point_coords': resize_transform.apply_coords_torch(point_coords, original_size),
+         'original_coords': point_coords,
          'original_size': original_size,
+         'point_labels': torch.Tensor([1]),
          'img_embeddings': img_embeddings,
          'img_num': img_num # Apparently dataloader doesn't like strings
         }
+    
+    
 
 
     # def collate_fn(self, data): 
 
-        
     #     # image = self.images[index]
     #     # label = self.labels[index]
     #     # bboxes = torch.tensor(np.array([get_bbox_from_mask(label)]))
@@ -134,7 +148,6 @@ class NpzDataset(Dataset):
     #     # #  'boxes': resize_transform.apply_boxes_torch(bboxes, original_size),
     #     #  'original_size': original_size
     #     # }
-
 
     #     images = [torch.tensor(d['image']) for d in data] #(3)
     #     labels = [d['label'] for d in data]

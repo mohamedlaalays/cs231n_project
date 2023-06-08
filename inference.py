@@ -22,23 +22,31 @@ from evaluation import *
 def segment_data(data):
     dataroot = f'dataset/npz_{args.model}/{data}/'
     dataset = NpzDataset(dataroot)
-    data_dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
+    data_dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     dice_coefs, IoU_scores = [], []
     for i, batch in tqdm(enumerate(data_dataloader)):
 
+
+        # if i == 1: break
+
         batched_output = sam([batch], multimask_output=False)
 
+        # print(f'{batched_output=}')
+
         img_num = batch['img_num'].item()
+
         img_path = f"dataset/original/{data}/images/{data}_{img_num}.png"
         label_path = f"dataset/original/{data}/labels/{data}_{img_num}.png"
         label = io.imread(label_path)
         pred_mask = batched_output[0]['masks'][0].squeeze().numpy()
     
+
         # randomly pick few images to qualitatively check the model performance
         # the images are saved in sample_images folder
-        if random.randint(1, 100) == 1:
+        if random.randint(1, 100) < -2:
             # side_by_side(img_path, label_path, img_num)
+            # show_points_on_image(io.imread(img_path), get_random_fg(label), input_labels=None)
             superpose_img_label(img_path, label_path, img_num)
             superpose_img_mask(img_path, label_path, pred_mask, img_num) # first mask of the first output
 
