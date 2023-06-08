@@ -20,8 +20,8 @@ from evaluation import *
 
 
 def segment_data(data):
-
-    dataset = NpzDataset(data)
+    dataroot = f'dataset/npz_{args.model}/{data}/'
+    dataset = NpzDataset(dataroot)
     data_dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
 
     dice_coefs, IoU_scores = [], []
@@ -30,14 +30,14 @@ def segment_data(data):
         batched_output = sam([batch], multimask_output=False)
 
         img_num = batch['img_num'].item()
-        img_path = f"dataset/{data}/images/{data}_{img_num}.png"
-        label_path = f"dataset/{data}/labels/{data}_{img_num}.png"
+        img_path = f"dataset/original/{data}/images/{data}_{img_num}.png"
+        label_path = f"dataset/original/{data}/labels/{data}_{img_num}.png"
         label = io.imread(label_path)
         pred_mask = batched_output[0]['masks'][0].squeeze().numpy()
     
         # randomly pick few images to qualitatively check the model performance
         # the images are saved in sample_images folder
-        if random.randint(1, 100) < 3:
+        if random.randint(1, 100) == 1:
             # side_by_side(img_path, label_path, img_num)
             superpose_img_label(img_path, label_path, img_num)
             superpose_img_mask(img_path, label_path, pred_mask, img_num) # first mask of the first output
@@ -62,9 +62,9 @@ def get_args():
     parser.add_argument("--dataset", type=str, required=True,
                         help='Choose one of the two dataset',
                         choices=('malignant', 'benign'))
-    parser.add_argument("--model", type=str, default="vit_h",
-                        help='Currently only supports the huge model',
-                        choices=("vit_h"))
+    parser.add_argument("--model", type=str, required=True,
+                        help='Currently supports the huge and the base models',
+                        choices=("base", "huge"))
     parser.add_argument("--use_cpu", action='store_true')
 
     args = parser.parse_args()
@@ -79,15 +79,23 @@ if __name__ == "__main__":
     np.random.seed(args.seed)
 
     models = {
-        'vit_h': 'sam_vit_h_4b8939.pth',
-        'vit_l': 'sam_vit_l_0b3195.pth',
-        'vit_b': 'sam_vit_b_01ec64.pth'
+        'huge': 'sam_vit_h_4b8939.pth',
+        'large': 'sam_vit_l_0b3195.pth',
+        'base': 'sam_vit_b_01ec64.pth'
     }
 
-    model_type = args.model
-    model = models[model_type]
+    model_types = {
+        'huge': 'vit_h',
+        'large': 'vit_l',
+        'base': 'vit_b'
+    }
+
+    model_type = model_types[args.model]
+    model = models[args.model]
     device = "cuda" if not args.use_cpu else "cpu"
     sam_checkpoint = f"models/{model}"
+
+    print(f'starting ....... {model=}')
 
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
     resize_transform = ResizeLongestSide(sam.image_encoder.img_size)

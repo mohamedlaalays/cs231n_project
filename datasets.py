@@ -20,6 +20,14 @@ np.random.seed(231)
 
 join = os.path.join
 
+sam_checkpoint = "models/sam_vit_b_01ec64.pth"
+model_type = "vit_b"
+device = "cuda"
+
+sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
+resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
+resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
+
 
 
 def create_npz_dataset(data):
@@ -46,7 +54,7 @@ def create_npz_dataset(data):
                 img_embeddings=img_embeddings.cpu(),
                 img_num=img_num)    
 
-        if i == 1: break
+        # if i == 210: break
 
 
 
@@ -55,7 +63,7 @@ def create_npz_dataset(data):
 # create a dataset class to load npz data and return back image embeddings and ground truth
 class NpzDataset(Dataset): 
     def __init__(self, data_root):
-        self.data_root = f'dataset/npz/{data_root}/'
+        self.data_root = data_root
         self.npz_files = sorted(os.listdir(self.data_root)) 
         self.npz_data = [np.load(join(self.data_root, f)) for f in self.npz_files]
 
@@ -68,7 +76,7 @@ class NpzDataset(Dataset):
         self.original_sizes = [data['original_size'] for data in self.npz_data]
         self.embeddings = [data['img_embeddings'] for data in self.npz_data]
         self.img_nums = [data['img_num'] for data in self.npz_data]
-        print(f"loaded {len(self.images)} images drom {data_root} dataset")
+        print(f"loaded {len(self.images)} images from {data_root}")
     
     def __len__(self):
         return len(self.images)
@@ -84,6 +92,26 @@ class NpzDataset(Dataset):
         img_embeddings = self.embeddings[index]
         img_num = self.img_nums[index]
         
+
+        """
+        'image': The image as a torch tensor in 3xHxW format,
+                already transformed for input to the model.
+              'original_size': (tuple(int, int)) The original size of
+                the image before transformation, as (H, W).
+              'point_coords': (torch.Tensor) Batched point prompts for
+                this image, with shape BxNx2. Already transformed to the
+                input frame of the model.
+              'point_labels': (torch.Tensor) Batched labels for point prompts,
+                with shape BxN.
+              'boxes': (torch.Tensor) Batched box inputs, with shape Bx4.
+                Already transformed to the input frame of the model.
+              'mask_inputs': (torch.Tensor) Batched mask inputs to the model,
+                in the form Bx1xHxW.
+        """
+
+        # this function should require config parameter
+
+
         return {
          'image': image,
          'boxes': resize_transform.apply_boxes_torch(bboxes, original_size),
@@ -151,17 +179,10 @@ def preprocess(x: torch.Tensor) -> torch.Tensor:
 
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
 
-    sam_checkpoint = "models/sam_vit_b_01ec64.pth"
-    model_type = "vit_b"
-    device = "cuda"
-
-    sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-    resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
-
-    create_npz_dataset('malignant')
-    create_npz_dataset('benign')
+    # create_npz_dataset('malignant')
+    # create_npz_dataset('benign')
     
 
 
