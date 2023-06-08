@@ -15,14 +15,16 @@ def graph_result(result_name, dataset):
 
     # Plotting the graph
     plt.plot(x_values, y_values_dice, label="Average Dice Coefficient")
-    plt.plot(x_values, y_values_iou, label="Average IOU Score")
-    plt.xlabel("Bounding box increase (pixels)")
+    plt.plot(x_values, y_values_iou, label="Average IoU Score")
+    plt.xlabel("Number of points")
     plt.ylabel("Score")
-    plt.title(f"Graph of Average Dice Coefficient and Average IOU Score ({dataset})")
+    # plt.ylim(0, 1)
+    plt.title(f"Number of Points vs IoU and Dice Coeff Scores ({dataset})")
     plt.legend()
     # plt.show()
     plt.savefig(f'results/{result_name}.png')
 
 
 if __name__ == "__main__":
-    graph_result("malignant_vit_h_bbox", "Malignant")
+    # graph_result("benign_vit_h_num_pts", "Benign")
+    graph_result("malignant_vit_h_num_pts", "Malignant")

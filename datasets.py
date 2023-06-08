@@ -63,11 +63,12 @@ def create_npz_dataset(data):
 
 # create a dataset class to load npz data and return back image embeddings and ground truth
 class NpzDataset(Dataset): 
-    def __init__(self, data_root, bbox_size):
+    def __init__(self, data_root, exp_config):
         self.data_root = data_root
         self.npz_files = sorted(os.listdir(self.data_root)) 
         self.npz_data = [np.load(join(self.data_root, f)) for f in self.npz_files]
-        self.bbox_size = bbox_size
+        self.bbox_size = exp_config['bbox_size']
+        self.num_pts = exp_config['num_pts']
 
         # max_length = max(len(d['label']) for d in self.npz_data)
         # # Pad all arrays with zeros using NumPy
@@ -87,16 +88,25 @@ class NpzDataset(Dataset):
         image = self.images[index]
         label = self.labels[index]
 
-        bboxes = torch.tensor(np.array([get_bbox_from_mask(label, self.bbox_size)]))
+        # bboxes = torch.tensor(np.array([get_bbox_from_mask(label, self.bbox_size)]))
         original_size = self.original_sizes[index]
         img_embeddings = self.embeddings[index]
         img_num = self.img_nums[index]
 
+        bbox = get_bbox_from_mask(label, self.bbox_size)
+        point_coords, point_labels = get_random_pts(label, bbox, self.num_pts)
+        # point_coords = torch.tensor(org_point_coords)
+        # point_labels = torch.tensor(point_labels)
+        
         return {
          'image': image,
-         'boxes': resize_transform.apply_boxes_torch(bboxes, original_size),
+         'point_coords': resize_transform.apply_coords_torch(torch.tensor(point_coords), original_size),
+         'original_coords': point_coords,
          'original_size': original_size,
+         'point_labels': torch.tensor(point_labels),
+         'boxes': resize_transform.apply_boxes_torch(torch.tensor(np.array([bbox])), original_size),
          'img_embeddings': img_embeddings,
+
          'img_num': img_num # Apparently dataloader doesn't like strings
         }
     

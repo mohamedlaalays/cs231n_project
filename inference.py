@@ -20,9 +20,9 @@ from utils import *
 from evaluation import *
 
 
-def segment_data(data):
+def segment_data(data, exp_config):
     dataroot = f'dataset/npz_{args.model}/{data}/'
-    dataset = NpzDataset(dataroot, bbox_size)
+    dataset = NpzDataset(dataroot, exp_config)
     data_dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     dice_coefs, IoU_scores = [], []
@@ -45,24 +45,28 @@ def segment_data(data):
 
         # randomly pick few images to qualitatively check the model performance
         # the images are saved in sample_images folder
-        if random.randint(1, 100) < -2:
+        if random.randint(1, 100) == -1:
             # side_by_side(img_path, label_path, img_num)
-            # show_points_on_image(io.imread(img_path), get_random_fg(label), input_labels=None)
-            superpose_img_label(img_path, label_path, img_num)
-            superpose_img_mask(img_path, label_path, pred_mask, img_num) # first mask of the first output
+            # print(f'{batch["point_labels"].numpy()[0]=}')
+            input_points = batch["original_coords"].numpy()[0]
+            input_labels = batch["point_labels"].numpy()[0]
+            show_points_on_image(io.imread(img_path), input_points, input_labels=input_labels)
+            # superpose_img_label(img_path, label_path, img_num)
+            superpose_img_mask(img_path, label_path, pred_mask, img_num, exp_config['bbox_size']) # first mask of the first output
 
-        
-        # if i == 100: break
         dice_coef = compute_dice_coefficient(label, pred_mask)
         IoU_score = IoU(label, pred_mask)
         dice_coefs.append(dice_coef)
         IoU_scores.append(IoU_score)
         # print(f'{dice_coef=}')
+        
         # break
+
+
     avg_dice_coef = sum(dice_coefs) / len(dice_coefs)
     avg_iou_score = sum(IoU_scores) / len(IoU_scores)
-    print(f'The average dice coefficient of {data} dataset with {bbox_size} box increase: {avg_dice_coef}')
-    print(f'The intersection over union (IoU) of {data} dataset with {bbox_size} box increase: {avg_iou_score}')
+    print(f'The average dice coefficient of {data} dataset with {exp_config} configuration: {avg_dice_coef}')
+    print(f'The intersection over union (IoU) of {data} dataset with {exp_config} configuration: {avg_iou_score}')
     return avg_dice_coef, avg_iou_score
 
 
@@ -110,13 +114,24 @@ if __name__ == "__main__":
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
     resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
     dataset = args.dataset
+
     results = {}
-    for bbox_size in range(0, 100, 10):
-        avg_dice_coef, avg_iou_score = segment_data(dataset)
-        results[bbox_size] = {
-                                'avg_dice_coef': avg_dice_coef,
-                                'avg_iou_score': avg_iou_score
-                              }
-    file_path = f'results/{dataset}_{model_type}_bbox.json'
-    with open(file_path, "w") as json_file:
-        json.dump(results, json_file)
+    exp_config = {
+            'bbox_size': 20
+        }
+    
+    # for num_pts in range(1, 10, 1):
+    #     exp_config['num_pts'] = num_pts
+    #     avg_dice_coef, avg_iou_score = segment_data(dataset, exp_config)
+    #     results[num_pts] = {
+    #                             'avg_dice_coef': avg_dice_coef,
+    #                             'avg_iou_score': avg_iou_score
+    #                           }
+        
+    # file_path = f'results/{dataset}_{model_type}_num_pts.json'
+    # with open(file_path, "w") as json_file:
+    #     json.dump(results, json_file)
+
+
+    # exp_config['num_pts'] = 8
+    # avg_dice_coef, avg_iou_score = segment_data(dataset, exp_config)
