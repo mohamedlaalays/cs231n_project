@@ -16,6 +16,7 @@ from datasets import NpzDataset
 import random
 import argparse
 import json
+import cv
 from utils import *
 from evaluation import *
 
@@ -23,7 +24,7 @@ from evaluation import *
 def segment_data(data, exp_config):
     dataroot = f'dataset/npz_{args.model}/{data}/'
     dataset = NpzDataset(dataroot, exp_config)
-    data_dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
+    data_dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
 
     dice_coefs, IoU_scores = [], []
     for i, batch in tqdm(enumerate(data_dataloader)):
@@ -43,21 +44,23 @@ def segment_data(data, exp_config):
         pred_mask = batched_output[0]['masks'][0].squeeze().numpy()
     
 
-        # randomly pick few images to qualitatively check the model performance
-        # the images are saved in sample_images folder
-        if random.randint(1, 100) == -1:
-            # side_by_side(img_path, label_path, img_num)
-            # print(f'{batch["point_labels"].numpy()[0]=}')
-            input_points = batch["original_coords"].numpy()[0]
-            input_labels = batch["point_labels"].numpy()[0]
-            show_points_on_image(io.imread(img_path), input_points, input_labels=input_labels)
-            # superpose_img_label(img_path, label_path, img_num)
-            superpose_img_mask(img_path, label_path, pred_mask, img_num, exp_config['bbox_size']) # first mask of the first output
-
         dice_coef = compute_dice_coefficient(label, pred_mask)
         IoU_score = IoU(label, pred_mask)
         dice_coefs.append(dice_coef)
         IoU_scores.append(IoU_score)
+
+        # randomly pick few images to qualitatively check the model performance
+        # the images are saved in sample_images folder
+        if random.randint(1, 100) < 100 and dice_coef < 0.5:
+            input_points = batch["original_coords"].numpy()[0]
+            input_labels = batch["point_labels"].numpy()[0]
+            original_box = batch["original_box"].numpy()[0]
+            superposed_image = superpose_img_label(img_path, label_path, img_num)
+            show_points_and_boxes_gt_on_image(superposed_image, [original_box], input_points, input_labels)
+            superpose_img_mask(img_path, label_path, pred_mask, img_num, exp_config['bbox_size'])
+            print(f'{img_num}: {dice_coef=}')
+
+
         # print(f'{dice_coef=}')
         
         # break
@@ -131,7 +134,7 @@ if __name__ == "__main__":
     
 
 
-    exp_config['num_pts'] = 1
+    # exp_config['num_pts'] = 4
     avg_dice_coef, avg_iou_score = segment_data(dataset, exp_config)
 
     results['baseline'] = {
@@ -139,6 +142,6 @@ if __name__ == "__main__":
                                 'avg_iou_score': avg_iou_score
                               }
 
-    file_path = f'results/{dataset}_{model_type}_baseline.json'
-    with open(file_path, "w") as json_file:
-        json.dump(results, json_file)
+    # file_path = f'results/{dataset}_{model_type}_baseline.json'
+    # with open(file_path, "w") as json_file:
+    #     json.dump(results, json_file)

@@ -41,7 +41,24 @@ def show_points_on_image(raw_image, input_points, input_labels=None):
     plt.savefig("random_pts.png")
     plt.show()
 
-def show_points_and_boxes_on_image(raw_image, boxes, input_points, input_labels=None):
+# def show_points_and_boxes_on_image(raw_image, boxes, input_points, input_labels=None):
+#     plt.figure(figsize=(10,10))
+#     plt.imshow(raw_image)
+#     input_points = np.array(input_points)
+#     if input_labels is None:
+#       labels = np.ones_like(input_points[:, 0])
+#     else:
+#       labels = np.array(input_labels)
+#     show_points(input_points, labels, plt.gca())
+#     for box in boxes:
+#       show_box(box, plt.gca())
+#     plt.axis('on')
+#     plt.show()
+
+
+def show_points_and_boxes_gt_on_image(superposed_image_path, boxes, input_points, input_labels):
+    raw_image = io.imread(superposed_image_path)
+    
     plt.figure(figsize=(10,10))
     plt.imshow(raw_image)
     input_points = np.array(input_points)
@@ -52,21 +69,9 @@ def show_points_and_boxes_on_image(raw_image, boxes, input_points, input_labels=
     show_points(input_points, labels, plt.gca())
     for box in boxes:
       show_box(box, plt.gca())
-    plt.axis('on')
-    plt.show()
 
 
-def show_points_and_boxes_on_image(raw_image, boxes, input_points, input_labels=None):
-    plt.figure(figsize=(10,10))
-    plt.imshow(raw_image)
-    input_points = np.array(input_points)
-    if input_labels is None:
-      labels = np.ones_like(input_points[:, 0])
-    else:
-      labels = np.array(input_labels)
-    show_points(input_points, labels, plt.gca())
-    for box in boxes:
-      show_box(box, plt.gca())
+    plt.savefig(superposed_image_path)
     plt.axis('on')
     plt.show()
 
@@ -127,7 +132,11 @@ def superpose_img_label(original_image, segmentation_mask, img_num):
   colored_mask[np.where((colored_mask == [255, 255, 255]).all(axis=2))] = mask_color
   # Superpose the colored mask on the original image
   superposed_image = cv2.addWeighted(original_image, 0.7, colored_mask, 0.3, 0)
-  cv2.imwrite(f'sample_images/org_label_{img_num}.png', superposed_image)
+  # print(f"{superposed_image}")
+  # img_arr = superposed_image
+  path = f'sample_images/org_label_{img_num}.png'
+  cv2.imwrite(path, superposed_image)
+  return path
 
 
 
