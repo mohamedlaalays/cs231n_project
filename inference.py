@@ -57,14 +57,18 @@ def segment_data(data, exp_config):
             low_accuracy_imgs += 1
         if IoU_score > 0.9: high_accuracy_imgs += 1
         # if random.randint(1, 100) == 1:
-        if IoU_score < 0.5:
+        if img_num == 209 and data == "malignant":
             # side_by_side(img_path, label_path, img_num)
             # print(f'{batch["point_labels"].numpy()[0]=}')
-            input_points = batch["original_coords"].numpy()[0]
-            input_labels = batch["point_labels"].numpy()[0]
             # show_points_on_image(io.imread(img_path), input_points, input_labels=input_labels)
             # superpose_img_label(img_path, label_path, img_num)
-            superpose_img_mask(img_path, label_path, pred_mask, img_num, exp_config['bbox_size']) # first mask of the first output
+            # if exp_config['bbox_size']
+
+            # input_points = batch["original_coords"].numpy()[0]
+            # input_labels = batch["point_labels"].numpy()[0]
+            # img_path, label_path, mask, img_num, iter,
+            superpose_img_mask(img_path, label_path, pred_mask, img_num, exp_config['bbox_size'], dist=exp_config['bbox_size']) # first mask of the first output
+            # superpose_img_mask(img_path, label_path, pred_mask, input_points, input_labels, img_num, exp_config['num_pts']) # first mask of the first output
 
         
         
@@ -125,10 +129,10 @@ if __name__ == "__main__":
     resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
     dataset = args.dataset
 
-    results = {}
-    exp_config = {
-            'bbox_size': 20
-        }
+    results, exp_config = {}, {}
+    # exp_config = {
+    #         'bbox_size': 40
+    #     }
     
     # for num_pts in range(1, 10, 1):
     #     exp_config['num_pts'] = num_pts
@@ -139,16 +143,21 @@ if __name__ == "__main__":
     #                           }
         
     
+    for bbox_dist in range(0, 100, 10):
+        print(f'{bbox_dist=}')
+        # exp_config['num_pts'] = 0
+        exp_config['bbox_size'] = bbox_dist
+        avg_dice_coef, avg_iou_score = segment_data(dataset, exp_config)
+
+        results['baseline'] = {
+                                    'avg_dice_coef': avg_dice_coef,
+                                    'avg_iou_score': avg_iou_score
+                                }
 
 
-    exp_config['num_pts'] = 4
-    avg_dice_coef, avg_iou_score = segment_data(dataset, exp_config)
 
-    results['baseline'] = {
-                                'avg_dice_coef': avg_dice_coef,
-                                'avg_iou_score': avg_iou_score
-                              }
+    
 
-    file_path = f'results/{dataset}_{model_type}_combo.json'
-    with open(file_path, "w") as json_file:
-        json.dump(results, json_file)
+    # file_path = f'results/{dataset}_{model_type}_combo.json'
+    # with open(file_path, "w") as json_file:
+    #     json.dump(results, json_file)

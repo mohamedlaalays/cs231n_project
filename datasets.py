@@ -67,8 +67,8 @@ class NpzDataset(Dataset):
         self.data_root = data_root
         self.npz_files = sorted(os.listdir(self.data_root)) 
         self.npz_data = [np.load(join(self.data_root, f)) for f in self.npz_files]
-        self.bbox_size = exp_config['bbox_size']
-        self.num_pts = exp_config['num_pts']
+        self.bbox_size = exp_config.get('bbox_size', None)
+        self.num_pts = exp_config.get('num_pts', None)
 
         # max_length = max(len(d['label']) for d in self.npz_data)
         # # Pad all arrays with zeros using NumPy
@@ -93,28 +93,44 @@ class NpzDataset(Dataset):
         img_embeddings = self.embeddings[index]
         img_num = self.img_nums[index]
 
-        bbox = get_bbox_from_mask(label, self.bbox_size)
-        fg_point_coords, fg_point_labels = get_random_fg(label, self.num_pts)
-        bg_point_coords, bg_point_labels = get_random_bg(label, bbox, 1)
-        point_coords = np.concatenate((fg_point_coords, bg_point_coords))
-        point_labels = np.concatenate((fg_point_labels, bg_point_labels))
-        
-        # print(f'{point_coords=}')
-        # print(f'{point_labels=}')
-        # point_coords = torch.tensor(org_point_coords)
-        # point_labels = torch.tensor(point_labels)
-        
-        return {
-         'image': image,
-         'point_coords': resize_transform.apply_coords_torch(torch.tensor(point_coords), original_size),
-         'original_coords': point_coords,
-         'original_size': original_size,
-         'point_labels': torch.tensor(point_labels),
-         'boxes': resize_transform.apply_boxes_torch(torch.tensor(np.array([bbox])), original_size),
-         'img_embeddings': img_embeddings,
+        img_info = {
+            'image': image,
+            # 'point_coords': resize_transform.apply_coords_torch(torch.tensor(point_coords), original_size),
+            # 'original_coords': point_coords,
+            'original_size': original_size,
+            # 'point_labels': torch.tensor(point_labels),
+            # 'boxes': resize_transform.apply_boxes_torch(torch.tensor(np.array([bbox])), original_size),
+            'img_embeddings': img_embeddings,
+            'img_num': img_num
+            }
 
-         'img_num': img_num # Apparently dataloader doesn't like strings
-        }
+        if self.bbox_size is not None:
+            bbox = get_bbox_from_mask(label, self.bbox_size)
+            img_info['boxes'] = resize_transform.apply_boxes_torch(torch.tensor(np.array([bbox])), original_size)
+        
+        # fg_point_coords, fg_point_labels = get_random_fg(label, self.num_pts)
+        # bg_point_coords, bg_point_labels = get_random_bg(label, bbox, 1)
+        # point_coords = np.concatenate((fg_point_coords, bg_point_coords))
+        # point_labels = np.concatenate((fg_point_labels, bg_point_labels))
+        if self.num_pts:
+            point_coords, point_labels = get_random_fg(label, self.num_pts)
+            img_info['point_coords'] = resize_transform.apply_coords_torch(torch.tensor(point_coords), original_size)
+            img_info['original_coords'] = point_coords
+            img_info['point_labels'] = torch.tensor(point_labels)
+        
+        
+        # return {
+        #  'image': image,
+        #  'point_coords': resize_transform.apply_coords_torch(torch.tensor(point_coords), original_size),
+        #  'original_coords': point_coords,
+        #  'original_size': original_size,
+        #  'point_labels': torch.tensor(point_labels),
+        #  'boxes': resize_transform.apply_boxes_torch(torch.tensor(np.array([bbox])), original_size),
+        #  'img_embeddings': img_embeddings,
+
+        #  'img_num': img_num # Apparently dataloader doesn't like strings
+        # }
+        return img_info
     
 
 

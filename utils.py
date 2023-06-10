@@ -131,18 +131,30 @@ def superpose_img_label(original_image, segmentation_mask, img_num):
 
 
 
-def superpose_img_mask(img_path, label_path, mask, img_num, dist):
+def superpose_img_mask(img_path, label_path, mask, img_num, iter, input_points=None, input_labels=None, dist=None):
+
   fig, ax = plt.subplots()
   image = io.imread(img_path)
-  label = io.imread(label_path)
-  image_box = get_bbox_from_mask(label, dist)
+  label = io.imread(label_path) 
   ax.imshow(image, aspect='auto')
-  show_mask(mask, ax, random_color=True)
-  show_box(image_box, ax)
+  
+  if input_points is not None:
+    input_points = np.array(input_points)
+    if input_labels is None:
+      labels = np.ones_like(input_points[:, 0])
+    else:
+      labels = np.array(input_labels)
+    show_points(input_points, labels, plt.gca())
+
+  
+  show_mask(mask, ax, random_color=False) # If you are showing the ground truth, pass `label` instead of `mask`
+  if dist is not None:
+    image_box = get_bbox_from_mask(label, dist)
+    show_box(image_box, ax)
   ax.axis('off')
 
   plt.tight_layout()
-  plt.savefig(f"sample_images/pred_label_{img_num}.png")
+  plt.savefig(f"sample_images/pred_iter_{iter}_{img_num}.png")
 
 
 
