@@ -131,14 +131,16 @@ def superpose_img_label(original_image, segmentation_mask, img_num):
 
 
 
-def superpose_img_mask(img_path, label_path, mask, img_num, dist):
+def superpose_img_mask(img_path, label_path, mask, img_num, dist=None):
   fig, ax = plt.subplots()
   image = io.imread(img_path)
   label = io.imread(label_path)
-  image_box = get_bbox_from_mask(label, dist)
+  
   ax.imshow(image, aspect='auto')
   show_mask(mask, ax, random_color=True)
-  show_box(image_box, ax)
+  if dist:
+    image_box = get_bbox_from_mask(label, dist)
+    show_box(image_box, ax)
   ax.axis('off')
 
   plt.tight_layout()

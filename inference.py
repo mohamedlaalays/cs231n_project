@@ -45,12 +45,12 @@ def segment_data(data, exp_config):
 
         # randomly pick few images to qualitatively check the model performance
         # the images are saved in sample_images folder
-        if random.randint(1, 100) == -1:
+        if random.randint(1, 100) < 3:
             # side_by_side(img_path, label_path, img_num)
             # print(f'{batch["point_labels"].numpy()[0]=}')
-            input_points = batch["original_coords"].numpy()[0]
-            input_labels = batch["point_labels"].numpy()[0]
-            show_points_on_image(io.imread(img_path), input_points, input_labels=input_labels)
+            # input_points = batch["original_coords"].numpy()[0]
+            # input_labels = batch["point_labels"].numpy()[0]
+            # show_points_on_image(io.imread(img_path), input_points, input_labels=input_labels)
             # superpose_img_label(img_path, label_path, img_num)
             superpose_img_mask(img_path, label_path, pred_mask, img_num, exp_config['bbox_size']) # first mask of the first output
 
@@ -117,27 +117,27 @@ if __name__ == "__main__":
 
     results = {}
     exp_config = {
-            'bbox_size': 0
+            'bbox_size': 1
         }
     
-    for num_pts in range(1, 10, 1):
-        exp_config['num_pts'] = num_pts
-        avg_dice_coef, avg_iou_score = segment_data(dataset, exp_config)
-        results[num_pts] = {
-                                'avg_dice_coef': avg_dice_coef,
-                                'avg_iou_score': avg_iou_score
-                              }
+    # for num_pts in range(1, 10, 1):
+    #     exp_config['num_pts'] = num_pts
+    #     avg_dice_coef, avg_iou_score = segment_data(dataset, exp_config)
+    #     results[num_pts] = {
+    #                             'avg_dice_coef': avg_dice_coef,
+    #                             'avg_iou_score': avg_iou_score
+    #                           }
         
     
 
 
-    # exp_config['num_pts'] = 1
-    # avg_dice_coef, avg_iou_score = segment_data(dataset, exp_config)
+    exp_config['num_pts'] = 0
+    avg_dice_coef, avg_iou_score = segment_data(dataset, exp_config)
 
-    # results['baseline'] = {
-    #                             'avg_dice_coef': avg_dice_coef,
-    #                             'avg_iou_score': avg_iou_score
-    #                           }
+    results['baseline'] = {
+                                'avg_dice_coef': avg_dice_coef,
+                                'avg_iou_score': avg_iou_score
+                              }
 
     file_path = f'results/{dataset}_{model_type}_baseline.json'
     with open(file_path, "w") as json_file:

@@ -100,10 +100,10 @@ class NpzDataset(Dataset):
         
         return {
          'image': image,
-         'point_coords': resize_transform.apply_coords_torch(torch.tensor(point_coords), original_size),
-         'original_coords': point_coords,
+        #  'point_coords': resize_transform.apply_coords_torch(torch.tensor(point_coords), original_size),
+        #  'original_coords': point_coords,
          'original_size': original_size,
-         'point_labels': torch.tensor(point_labels),
+        #  'point_labels': torch.tensor(point_labels),
         #  'boxes': resize_transform.apply_boxes_torch(torch.tensor(np.array([bbox])), original_size),
          'img_embeddings': img_embeddings,
 
