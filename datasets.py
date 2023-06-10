@@ -94,7 +94,7 @@ class NpzDataset(Dataset):
         img_num = self.img_nums[index]
 
         bbox = get_bbox_from_mask(label, self.bbox_size)
-        point_coords, point_labels = get_random_pts(label, bbox, self.num_pts)
+        point_coords, point_labels = get_random_fg(label, self.num_pts)
         # point_coords = torch.tensor(org_point_coords)
         # point_labels = torch.tensor(point_labels)
         

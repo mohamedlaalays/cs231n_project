@@ -117,27 +117,27 @@ if __name__ == "__main__":
 
     results = {}
     exp_config = {
-            'bbox_size': 20
+            'bbox_size': 0
         }
     
-    # for num_pts in range(1, 10, 1):
-    #     exp_config['num_pts'] = num_pts
-    #     avg_dice_coef, avg_iou_score = segment_data(dataset, exp_config)
-    #     results[num_pts] = {
-    #                             'avg_dice_coef': avg_dice_coef,
-    #                             'avg_iou_score': avg_iou_score
-    #                           }
+    for num_pts in range(1, 10, 1):
+        exp_config['num_pts'] = num_pts
+        avg_dice_coef, avg_iou_score = segment_data(dataset, exp_config)
+        results[num_pts] = {
+                                'avg_dice_coef': avg_dice_coef,
+                                'avg_iou_score': avg_iou_score
+                              }
         
     
 
 
-    exp_config['num_pts'] = 1
-    avg_dice_coef, avg_iou_score = segment_data(dataset, exp_config)
+    # exp_config['num_pts'] = 1
+    # avg_dice_coef, avg_iou_score = segment_data(dataset, exp_config)
 
-    results['baseline'] = {
-                                'avg_dice_coef': avg_dice_coef,
-                                'avg_iou_score': avg_iou_score
-                              }
+    # results['baseline'] = {
+    #                             'avg_dice_coef': avg_dice_coef,
+    #                             'avg_iou_score': avg_iou_score
+    #                           }
 
     file_path = f'results/{dataset}_{model_type}_baseline.json'
     with open(file_path, "w") as json_file:

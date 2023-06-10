@@ -60,8 +60,8 @@ if __name__ == "__main__":
     # together = raw_image + raw_label
     bbox = get_bbox_from_mask(raw_label, 200)
     # input_points, input_labels = get_random_bg(raw_label, bbox, 1000)
-    # input_points, input_labels = get_random_fg(raw_label, 1000)
-    input_points, input_labels = get_random_pts(raw_label, bbox, 3)
+    input_points, input_labels = get_random_fg(raw_label, 1000)
+    # input_points, input_labels = get_random_pts(raw_label, bbox, 3)
     # fg_count = 0
     # for i in range(1000):
     #     input_points, input_labels = get_random_pts(raw_label, bbox, 3000)
