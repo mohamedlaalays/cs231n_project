@@ -26,6 +26,7 @@ def segment_data(data, exp_config):
     data_dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     dice_coefs, IoU_scores = [], []
+    low_accuracy_imgs, high_accuracy_imgs = 0, 0
     for i, batch in tqdm(enumerate(data_dataloader)):
 
 
@@ -43,25 +44,34 @@ def segment_data(data, exp_config):
         pred_mask = batched_output[0]['masks'][0].squeeze().numpy()
     
 
-        # randomly pick few images to qualitatively check the model performance
-        # the images are saved in sample_images folder
-        if random.randint(1, 100) == -1:
-            # side_by_side(img_path, label_path, img_num)
-            # print(f'{batch["point_labels"].numpy()[0]=}')
-            input_points = batch["original_coords"].numpy()[0]
-            input_labels = batch["point_labels"].numpy()[0]
-            show_points_on_image(io.imread(img_path), input_points, input_labels=input_labels)
-            # superpose_img_label(img_path, label_path, img_num)
-            superpose_img_mask(img_path, label_path, pred_mask, img_num, exp_config['bbox_size']) # first mask of the first output
-
         dice_coef = compute_dice_coefficient(label, pred_mask)
         IoU_score = IoU(label, pred_mask)
         dice_coefs.append(dice_coef)
         IoU_scores.append(IoU_score)
         # print(f'{dice_coef=}')
+
+        # randomly pick few images to qualitatively check the model performance
+        # the images are saved in sample_images folder
+        # if random.randint(1, 100) == -1:
+        if IoU_score < 0.5:
+            low_accuracy_imgs += 1
+        if IoU_score > 0.9: high_accuracy_imgs += 1
+        # if random.randint(1, 100) == 1:
+        if IoU_score < 0.5:
+            # side_by_side(img_path, label_path, img_num)
+            # print(f'{batch["point_labels"].numpy()[0]=}')
+            input_points = batch["original_coords"].numpy()[0]
+            input_labels = batch["point_labels"].numpy()[0]
+            # show_points_on_image(io.imread(img_path), input_points, input_labels=input_labels)
+            # superpose_img_label(img_path, label_path, img_num)
+            superpose_img_mask(img_path, label_path, pred_mask, img_num, exp_config['bbox_size']) # first mask of the first output
+
+        
         
         # break
 
+    print(f'Number of images with LOW IoU accuracy: {low_accuracy_imgs}')
+    print(f'Number of images with HIGH IoU accuracy: {high_accuracy_imgs}')
 
     avg_dice_coef = sum(dice_coefs) / len(dice_coefs)
     avg_iou_score = sum(IoU_scores) / len(IoU_scores)

@@ -58,9 +58,9 @@ if __name__ == "__main__":
     raw_label = io.imread(f"dataset/original/benign/labels/benign_5.png", as_gray=True)
     print(f'{raw_label.shape=}')
     # together = raw_image + raw_label
-    bbox = get_bbox_from_mask(raw_label, 200)
+    bbox = get_bbox_from_mask(raw_label, 20)
     # input_points, input_labels = get_random_bg(raw_label, bbox, 1000)
-    input_points, input_labels = get_random_fg(raw_label, 1000)
+    input_points, input_labels = get_random_bg(raw_label, bbox, 20)
     # input_points, input_labels = get_random_pts(raw_label, bbox, 3)
     # fg_count = 0
     # for i in range(1000):
