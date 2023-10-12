@@ -13,6 +13,7 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.nn import functional as F
 import re
 from utils import *
+from experiment_setup import*
 
 # set seeds
 torch.manual_seed(231)
@@ -20,11 +21,12 @@ np.random.seed(231)
 
 join = os.path.join
 
-sam_checkpoint = "models/sam_vit_h_4b8939.pth"
-model_type = "vit_h"
+sam_checkpoint = "models/sam_vit_b_01ec64.pth"
+model_type = "vit_b"
 device = "cuda"
 
 sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
+resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
 resize_transform = ResizeLongestSide(sam.image_encoder.img_size)
 
 
@@ -46,14 +48,14 @@ def create_npz_dataset(data):
 
         img_num = int(re.findall(r'\d+', img_name)[0])
 
-        np.savez(f'dataset/npz/{data}/{img_name}.npz', 
+        np.savez(f'dataset/npz_base/{data}/{img_name}.npz', 
                 image=processed_img.cpu(), 
                 label=label, 
                 original_size=original_size,
                 img_embeddings=img_embeddings.cpu(),
                 img_num=img_num)    
 
-        # if i == 1: break
+        # if i == 210: break
 
 
 
@@ -61,10 +63,12 @@ def create_npz_dataset(data):
 
 # create a dataset class to load npz data and return back image embeddings and ground truth
 class NpzDataset(Dataset): 
-    def __init__(self, data_root):
-        self.data_root = f'dataset/npz/{data_root}/'
+    def __init__(self, data_root, exp_config):
+        self.data_root = data_root
         self.npz_files = sorted(os.listdir(self.data_root)) 
         self.npz_data = [np.load(join(self.data_root, f)) for f in self.npz_files]
+        self.bbox_size = exp_config.get('bbox_size', None)
+        self.num_pts = exp_config.get('num_pts', None)
 
         # max_length = max(len(d['label']) for d in self.npz_data)
         # # Pad all arrays with zeros using NumPy
@@ -75,7 +79,7 @@ class NpzDataset(Dataset):
         self.original_sizes = [data['original_size'] for data in self.npz_data]
         self.embeddings = [data['img_embeddings'] for data in self.npz_data]
         self.img_nums = [data['img_num'] for data in self.npz_data]
-        print(f"loaded {len(self.images)} images drom {data_root} dataset")
+        print(f"loaded {len(self.images)} images from {data_root}")
     
     def __len__(self):
         return len(self.images)
@@ -83,26 +87,55 @@ class NpzDataset(Dataset):
     def __getitem__(self, index):
         image = self.images[index]
         label = self.labels[index]
-        """
-        THIS PROBABLY WHERE YOU WILL BE INTEGRATING YOUR CODE BUT IF YOU FIND A BETTER, GO FOR IT
-        """
-        bboxes = torch.tensor(np.array([get_bbox_from_mask(label)]))
+
+        # bboxes = torch.tensor(np.array([get_bbox_from_mask(label, self.bbox_size)]))
         original_size = self.original_sizes[index]
         img_embeddings = self.embeddings[index]
         img_num = self.img_nums[index]
+
+        img_info = {
+            'image': image,
+            # 'point_coords': resize_transform.apply_coords_torch(torch.tensor(point_coords), original_size),
+            # 'original_coords': point_coords,
+            'original_size': original_size,
+            # 'point_labels': torch.tensor(point_labels),
+            # 'boxes': resize_transform.apply_boxes_torch(torch.tensor(np.array([bbox])), original_size),
+            'img_embeddings': img_embeddings,
+            'img_num': img_num
+            }
+
+        if self.bbox_size is not None:
+            bbox = get_bbox_from_mask(label, self.bbox_size)
+            img_info['boxes'] = resize_transform.apply_boxes_torch(torch.tensor(np.array([bbox])), original_size)
         
-        return {
-         'image': image,
-         'boxes': resize_transform.apply_boxes_torch(bboxes, original_size),
-         'original_size': original_size,
-         'img_embeddings': img_embeddings,
-         'img_num': img_num # Apparently dataloader doesn't like strings
-        }
+        # fg_point_coords, fg_point_labels = get_random_fg(label, self.num_pts)
+        # bg_point_coords, bg_point_labels = get_random_bg(label, bbox, 1)
+        # point_coords = np.concatenate((fg_point_coords, bg_point_coords))
+        # point_labels = np.concatenate((fg_point_labels, bg_point_labels))
+        if self.num_pts:
+            point_coords, point_labels = get_random_fg(label, self.num_pts)
+            img_info['point_coords'] = resize_transform.apply_coords_torch(torch.tensor(point_coords), original_size)
+            img_info['original_coords'] = point_coords
+            img_info['point_labels'] = torch.tensor(point_labels)
+        
+        
+        # return {
+        #  'image': image,
+        #  'point_coords': resize_transform.apply_coords_torch(torch.tensor(point_coords), original_size),
+        #  'original_coords': point_coords,
+        #  'original_size': original_size,
+        #  'point_labels': torch.tensor(point_labels),
+        #  'boxes': resize_transform.apply_boxes_torch(torch.tensor(np.array([bbox])), original_size),
+        #  'img_embeddings': img_embeddings,
+
+        #  'img_num': img_num # Apparently dataloader doesn't like strings
+        # }
+        return img_info
+    
 
 
     # def collate_fn(self, data): 
 
-        
     #     # image = self.images[index]
     #     # label = self.labels[index]
     #     # bboxes = torch.tensor(np.array([get_bbox_from_mask(label)]))
@@ -113,7 +146,6 @@ class NpzDataset(Dataset):
     #     # #  'boxes': resize_transform.apply_boxes_torch(bboxes, original_size),
     #     #  'original_size': original_size
     #     # }
-
 
     #     images = [torch.tensor(d['image']) for d in data] #(3)
     #     labels = [d['label'] for d in data]
@@ -130,16 +162,10 @@ class NpzDataset(Dataset):
     #     }
 
 
-
-
-
-
 def prepare_image(image, transform, device):
     image = transform.apply_image(image)
     image = torch.as_tensor(image, device=device.device) 
     return image.permute(2, 0, 1).contiguous()
-
-
 
 
 
@@ -155,6 +181,14 @@ def preprocess(x: torch.Tensor) -> torch.Tensor:
     padw = sam.image_encoder.img_size - w
     x = F.pad(x, (0, padw, 0, padh))
     return x
+
+
+
+# if __name__ == "__main__":
+
+    # create_npz_dataset('malignant')
+    # create_npz_dataset('benign')
+    
 
 
 
